@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chat Multi-Provider (CORS Fix V7)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <style>
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #1f2937; }
+    ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+    .markdown-body p { margin-bottom: 0.75em; }
+    .markdown-body pre { background: #111827; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin-bottom: 1rem; border: 1px solid #374151; }
+    .markdown-body code { font-family: monospace; background: #374151; padding: 0.2em 0.4em; border-radius: 0.25em; font-size: 0.9em; }
+    .markdown-body pre code { background: transparent; padding: 0; color: #e5e7eb; }
+    .markdown-body a { color: #60a5fa; text-decoration: underline; }
+    .typing-dot { animation: typing 1.4s infinite ease-in-out both; }
+    .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+    @keyframes typing { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+  </style>
+</head>
+
+<body class="bg-gray-900 text-gray-100 font-sans h-screen flex overflow-hidden">
+  
+  <aside class="w-64 bg-gray-950 flex flex-col border-r border-gray-800 hidden md:flex">
+    <div class="p-4">
+      <button onclick="window.createNewChat()" class="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition flex items-center justify-center gap-2">
+        <i class="fas fa-plus"></i> Nuevo Chat
+      </button>
+    </div>
+    <div class="flex-1 overflow-y-auto px-2" id="chat-history-list"></div>
+    <div class="p-4 border-t border-gray-800 text-xs text-gray-500 text-center">Google • Groq • HuggingFace</div>
+  </aside>
+
+  <main class="flex-1 flex flex-col h-full relative">
+    <header class="h-auto py-3 border-b border-gray-800 flex flex-col justify-center px-4 bg-gray-900 z-10 gap-2">
+      <div class="flex items-center justify-between w-full">
+        <div class="flex items-center gap-3 flex-1">
+          <button class="md:hidden text-gray-400" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+          <div class="flex flex-col w-full max-w-md">
+            <div class="relative">
+              <select id="model-selector" onchange="window.changeModel()" class="bg-gray-800 text-white text-sm font-bold rounded-t-lg focus:ring-green-500 focus:border-green-500 block w-full p-2 border-gray-700 appearance-none pr-8 cursor-pointer"></select>
+              <div class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-gray-400"><i class="fas fa-chevron-down text-xs"></i></div>
+            </div>
+            <div class="bg-gray-950 border-x border-b border-gray-700 rounded-b-lg px-2 py-1 flex items-center justify-between text-[10px] text-gray-400">
+              <span id="model-count-badge" class="text-green-400">Sin modelos validados</span>
+              <span id="validation-status" class="text-gray-500 text-right">Usa ⚙️ para diagnosticar</span>
+            </div>
+          </div>
+        </div>
+        <button onclick="window.openSettings()" class="text-gray-400 hover:text-white transition p-2 rounded-full hover:bg-gray-800 ml-2 relative">
+          <i class="fas fa-cog fa-lg"></i>
+          <span id="settings-dot" class="hidden absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-gray-900"></span>
+        </button>
+      </div>
+    </header>
+
+    <div id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth">
+      <div id="welcome-screen" class="h-full flex flex-col items-center justify-center text-gray-500 opacity-100">
+        <div class="flex gap-4 mb-4 text-5xl">
+          <i class="fab fa-google text-blue-500"></i>
+          <i class="fas fa-bolt text-purple-500"></i>
+          <i class="far fa-smile text-yellow-500"></i>
+        </div>
+        <h2 class="text-2xl font-bold text-gray-300">Chat Multi-Proveedor</h2>
+        <div class="mt-4 bg-blue-900/30 border border-blue-500/50 p-3 rounded text-xs text-blue-200 max-w-sm text-center">
+          <i class="fas fa-info-circle"></i> <b>Nota Técnica:</b><br>
+          Las peticiones a Hugging Face se enrutan vía <b>corsproxy.io</b> para evitar el bloqueo del navegador.
+        </div>
+      </div>
+      <div id="messages-list" class="flex flex-col gap-6 max-w-3xl mx-auto w-full pb-4 hidden"></div>
+    </div>
+
+    <div class="p-4 bg-gray-900 border-t border-gray-800">
+      <div class="max-w-3xl mx-auto relative">
+        <textarea id="user-input" rows="1" class="w-full bg-gray-800 text-white rounded-xl pl-4 pr-12 py-3 focus:outline-none focus:ring-2 focus:ring-green-600 resize-none overflow-hidden" placeholder="Escribe tu mensaje..." oninput="window.autoResize(this)" onkeydown="window.handleEnter(event)"></textarea>
+        <button onclick="window.sendMessage()" id="send-btn" class="absolute right-2 bottom-2 bg-green-600 hover:bg-green-700 text-white p-2 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
+          <i class="fas fa-paper-plane"></i>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <div id="settings-modal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50 backdrop-blur-sm">
+    <div class="bg-gray-800 rounded-xl p-6 w-[450px] border border-gray-700 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <h3 class="text-xl font-bold mb-4 flex items-center gap-2"><i class="fas fa-sliders-h text-green-500"></i> Configuración</h3>
+
+      <div class="mb-4 bg-gray-900 p-3 rounded-lg border border-gray-700">
+        <div class="flex items-center justify-between mb-2"><span class="text-sm font-semibold text-blue-400"><i class="fab fa-google"></i> Google AI</span></div>
+        <input type="password" id="google-api-key-input" class="w-full bg-gray-950 border border-gray-700 rounded p-2 mb-2 text-white text-xs focus:border-blue-500 focus:outline-none" placeholder="AIzaSy..." />
+        <button onclick="window.runGoogleDiagnostic()" id="google-sync-btn" class="w-full py-2 bg-blue-900/50 hover:bg-blue-800 text-blue-200 border border-blue-800 rounded text-xs transition flex items-center justify-center gap-2"><i class="fas fa-stethoscope"></i> Diagnóstico Google</button>
+        <div id="google-scan-log" class="mt-2 h-16 bg-black rounded p-2 overflow-y-auto text-[10px] font-mono border border-gray-800 hidden text-gray-400"></div>
+      </div>
+
+      <div class="mb-4 bg-gray-900 p-3 rounded-lg border border-gray-700">
+        <div class="flex items-center justify-between mb-2"><span class="text-sm font-semibold text-purple-400"><i class="fas fa-bolt"></i> GroqCloud</span></div>
+        <input type="password" id="groq-api-key-input" class="w-full bg-gray-950 border border-gray-700 rounded p-2 mb-2 text-white text-xs focus:border-purple-500 focus:outline-none" placeholder="gsk_..." />
+        <button onclick="window.runGroqDiagnostic()" id="groq-sync-btn" class="w-full py-2 bg-purple-900/50 hover:bg-purple-800 text-purple-200 border border-purple-800 rounded text-xs transition flex items-center justify-center gap-2"><i class="fas fa-stethoscope"></i> Diagnóstico Groq</button>
+        <div id="groq-scan-log" class="mt-2 h-16 bg-black rounded p-2 overflow-y-auto text-[10px] font-mono border border-gray-800 hidden text-gray-400"></div>
+      </div>
+
+      <div class="mb-4 bg-gray-900 p-3 rounded-lg border border-gray-700">
+        <div class="flex items-center justify-between mb-2"><span class="text-sm font-semibold text-yellow-400"><i class="far fa-smile"></i> Hugging Face</span></div>
+        <input type="password" id="hf-api-key-input" class="w-full bg-gray-950 border border-gray-700 rounded p-2 mb-2 text-white text-xs focus:border-yellow-500 focus:outline-none" placeholder="hf_..." />
+        <button onclick="window.runHfDiagnostic()" id="hf-sync-btn" class="w-full py-2 bg-yellow-900/30 hover:bg-yellow-800/50 text-yellow-200 border border-yellow-800 rounded text-xs transition flex items-center justify-center gap-2"><i class="fas fa-stethoscope"></i> Diagnóstico HF (vía Proxy)</button>
+        <div id="hf-scan-log" class="mt-2 h-24 bg-black rounded p-2 overflow-y-auto text-[10px] font-mono border border-gray-800 hidden text-gray-400"></div>
+      </div>
+
+      <div class="flex justify-end gap-2 mt-4 border-t border-gray-700 pt-4">
+        <button onclick="window.closeSettings()" class="px-4 py-2 text-gray-300 hover:bg-gray-700 rounded transition text-sm">Cerrar</button>
+        <button onclick="window.saveSettings()" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition text-sm">Guardar Todo</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var POPULAR_HF_MODELS = [
+        "Qwen/Qwen2.5-72B-Instruct", 
+        "HuggingFaceH4/zephyr-7b-beta",
+        "mistralai/Mistral-7B-Instruct-v0.3",
+        "microsoft/Phi-3.5-mini-instruct",
+        "google/gemma-2-9b-it"
+    ];
+    var APP_STORAGE_KEY = "ai_chat_v7_cors"; 
+    var googleModels = [], groqModels = [], hfModels = [];
+    var state = { googleApiKey: "", groqApiKey: "", hfApiKey: "", currentModel: null, chats: [], currentChatId: null, isGenerating: false };
+
+    window.onload = function() {
+        window.loadFromLocalStorage(); window.updateSettingsDot(); window.initModelSelector(); window.renderChatHistory();
+        if (state.chats.length > 0) {
+            if (!state.chats.find(c => c.id === state.currentChatId)) state.currentChatId = state.chats[0].id;
+            window.loadChat(state.currentChatId);
+        } else window.createNewChat(false);
+    };
+
+    window.saveToLocalStorage = function() {
+      localStorage.setItem(APP_STORAGE_KEY, JSON.stringify({
+          keys: { google: state.googleApiKey, groq: state.groqApiKey, hf: state.hfApiKey },
+          currentModel: state.currentModel, chats: state.chats,
+          cachedModels: { google: googleModels, groq: groqModels, hf: hfModels }
+      }));
+    }
+
+    window.loadFromLocalStorage = function() {
+      const raw = localStorage.getItem(APP_STORAGE_KEY);
+      if (!raw) return;
+      try {
+        const data = JSON.parse(raw);
+        state.googleApiKey = data.keys?.google || ""; state.groqApiKey = data.keys?.groq || ""; state.hfApiKey = data.keys?.hf || "";
+        state.currentModel = data.currentModel || null; state.chats = data.chats || [];
+        if (data.cachedModels) { googleModels = data.cachedModels.google || []; groqModels = data.cachedModels.groq || []; hfModels = data.cachedModels.hf || []; }
+      } catch (e) {}
+    }
+
+    const delay = ms => new Promise(res => setTimeout(res, ms));
+
+    window.runGoogleDiagnostic = async function() {
+      const apiKey = document.getElementById("google-api-key-input").value.trim();
+      const log = document.getElementById("google-scan-log");
+      const btn = document.getElementById("google-sync-btn");
+      if (!apiKey) return alert("Falta API Key de Google");
+      state.googleApiKey = apiKey; window.saveToLocalStorage();
+      btn.disabled = true; btn.innerText = "Probando..."; log.classList.remove("hidden"); log.innerHTML = ">> Google: Iniciando...";
+      let valid = [];
+      try {
+        const listResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+        if(!listResp.ok) throw new Error("Key inválida / API Error");
+        const listData = await listResp.json();
+        const rawModels = (listData.models || []).filter(m => m.supportedGenerationMethods?.includes("generateContent"));
+        for (const m of rawModels) {
+           const modelId = m.name.replace("models/", "");
+           log.innerHTML += `<div class="text-blue-300">Test: ${modelId}...</div>`; log.scrollTop = log.scrollHeight;
+           await delay(350);
+           try {
+             const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ contents: [{ parts: [{ text: "hi" }] }], generationConfig: { maxOutputTokens: 1 } })
+             });
+             if(r.ok) { valid.push({ id: modelId, name: m.displayName || modelId, provider: "google" }); log.innerHTML += `<div class="text-green-500 pl-2">✔ OK</div>`; }
+           } catch(e) {}
+        }
+        googleModels = valid; log.innerHTML += `<div class="text-white mt-2">>> Total: ${valid.length}</div>`;
+      } catch (e) { log.innerHTML += `<div class="text-red-500">Error: ${e.message}</div>`; }
+      window.saveToLocalStorage(); window.initModelSelector(); btn.disabled = false; btn.innerHTML = '<i class="fas fa-stethoscope"></i> Diagnóstico Google';
+    }
+
+    window.runGroqDiagnostic = async function() {
+      const apiKey = document.getElementById("groq-api-key-input").value.trim();
+      const log = document.getElementById("groq-scan-log");
+      const btn = document.getElementById("groq-sync-btn");
+      if (!apiKey) return alert("Falta API Key de Groq");
+      state.groqApiKey = apiKey; window.saveToLocalStorage();
+      btn.disabled = true; btn.innerText = "Probando..."; log.classList.remove("hidden"); log.innerHTML = ">> Groq: Listando...";
+      let valid = [];
+      try {
+        const resp = await fetch("https://api.groq.com/openai/v1/models", { headers: { Authorization: `Bearer ${apiKey}` } });
+        if(!resp.ok) throw new Error("Error de conexión");
+        const data = await resp.json();
+        (data.data || []).forEach(m => { if(!m.id.includes("whisper")) valid.push({ id: m.id, name: m.id, provider: "groq" }); });
+        groqModels = valid; log.innerHTML += `<div class="text-green-400 mt-2">>> Total: ${valid.length}</div>`;
+      } catch(e) { log.innerHTML += `<div class="text-red-500">Error: ${e.message}</div>`; }
+      window.saveToLocalStorage(); window.initModelSelector(); btn.disabled = false; btn.innerHTML = '<i class="fas fa-stethoscope"></i> Diagnóstico Groq';
+    }
+
+    window.runHfDiagnostic = async function() {
+      const apiKey = document.getElementById("hf-api-key-input").value.trim();
+      const log = document.getElementById("hf-scan-log");
+      const btn = document.getElementById("hf-sync-btn");
+      if (!apiKey) return alert("Falta API Key de Hugging Face");
+      
+      state.hfApiKey = apiKey; window.saveToLocalStorage();
+      btn.disabled = true; btn.innerText = "Probando (Proxy)..."; log.classList.remove("hidden"); log.innerHTML = ">> HF: Iniciando (vía corsproxy.io)...";
+      let valid = [];
+
+      for (const modelId of POPULAR_HF_MODELS) {
+          const shortName = modelId.split("/")[1];
+          log.innerHTML += `<div class="text-yellow-200 mt-1">Test: ${shortName}...</div>`; log.scrollTop = log.scrollHeight;
+          
+          // CONSTRUCCIÓN DE URL CON PROXY PARA EVITAR CORS
+          const hfUrl = `https://api-inference.huggingface.co/models/${modelId}/v1/chat/completions`;
+          const proxyUrl = "https://corsproxy.io/?" + encodeURIComponent(hfUrl);
+          
+          try {
+              const resp = await fetch(proxyUrl, {
+                  method: "POST",
+                  headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+                  body: JSON.stringify({ model: modelId, messages: [{ role: "user", content: "hi" }], max_tokens: 1, stream: false })
+              });
+
+              if (resp.ok) {
+                  valid.push({ id: modelId, name: modelId, provider: "hf" });
+                  log.innerHTML += `<div class="text-green-500 pl-4">✔ Disponible</div>`;
+              } else {
+                  // A veces el proxy devuelve 200 pero el contenido es un error
+                  log.innerHTML += `<div class="text-gray-500 pl-4">Estado: ${resp.status}</div>`;
+                  // Aún así, si no explota, lo consideramos tentativo para no bloquear
+                  if(resp.status === 503) valid.push({ id: modelId, name: modelId, provider: "hf" });
+              }
+          } catch (e) {
+              // Si falla aquí, suele ser el proxy caído
+              log.innerHTML += `<div class="text-red-500 pl-4">✘ Fallo Proxy</div>`;
+          }
+          await delay(200);
+      }
+      hfModels = valid; window.saveToLocalStorage(); window.initModelSelector();
+      log.innerHTML += `<div class="text-white font-bold mt-2">>> Total: ${valid.length}</div>`;
+      btn.disabled = false; btn.innerHTML = '<i class="fas fa-stethoscope"></i> Diagnóstico HF';
+    }
+
+    window.ensureValidCurrentModel = function() {
+      const m = window.getCurrentModel(); if (m) return;
+      if (googleModels.length > 0) state.currentModel = { provider: "google", id: googleModels[0].id };
+      else if (groqModels.length > 0) state.currentModel = { provider: "groq", id: groqModels[0].id };
+      else if (hfModels.length > 0) state.currentModel = { provider: "hf", id: hfModels[0].id };
+      else state.currentModel = null;
+    }
+    window.getCurrentModel = function() {
+      if (!state.currentModel) return null;
+      let list = state.currentModel.provider === "google" ? googleModels : (state.currentModel.provider === "groq" ? groqModels : hfModels);
+      return list.find((m) => m.id === state.currentModel.id) || null;
+    }
+    window.initModelSelector = function() {
+      window.ensureValidCurrentModel();
+      const selector = document.getElementById("model-selector");
+      const badge = document.getElementById("model-count-badge");
+      const total = googleModels.length + groqModels.length + hfModels.length;
+      if (total === 0) {
+        selector.innerHTML = '<option value="" disabled selected>Sin modelos. Ejecuta diagnósticos ⚙️</option>'; selector.disabled = true; badge.textContent = "0 modelos"; return;
+      }
+      selector.disabled = false;
+      let html = "";
+      if (googleModels.length) { html += '<optgroup label="Google AI">'; googleModels.forEach(m => html += `<option value="google::${m.id}" ${window.isSelected("google", m.id)}>${m.name}</option>`); html += "</optgroup>"; }
+      if (groqModels.length) { html += '<optgroup label="GroqCloud">'; groqModels.forEach(m => html += `<option value="groq::${m.id}" ${window.isSelected("groq", m.id)}>${m.name}</option>`); html += "</optgroup>"; }
+      if (hfModels.length) { html += '<optgroup label="Hugging Face">'; hfModels.forEach(m => { const s = m.name.split("/")[1] || m.name; html += `<option value="hf::${m.id}" ${window.isSelected("hf", m.id)}>${s}</option>` }); html += "</optgroup>"; }
+      selector.innerHTML = html; badge.textContent = `G: ${googleModels.length} • Groq: ${groqModels.length} • HF: ${hfModels.length}`;
+    }
+    window.isSelected = function(prov, id) { return (state.currentModel?.provider === prov && state.currentModel?.id === id) ? "selected" : ""; }
+    window.changeModel = function() {
+      const v = document.getElementById("model-selector").value; if (!v) return;
+      const [p, i] = v.split("::"); state.currentModel = { provider: p, id: i }; window.saveToLocalStorage();
+    }
+    window.callGoogle = async function(model, messages) {
+       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${state.googleApiKey}`;
+       const contents = messages.map(m => ({ role: m.role === "user" ? "user" : "model", parts: [{ text: m.text }] }));
+       const res = await fetch(url, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ contents }) });
+       const data = await res.json(); if(!res.ok) throw new Error(data.error?.message || `Error ${res.status}`);
+       return data.candidates?.[0]?.content?.parts?.[0]?.text || "Vacio";
+    }
+    window.callGroq = async function(model, messages) { return window.callOpenAIFormat("https://api.groq.com/openai/v1/chat/completions", state.groqApiKey, model.id, messages, false); }
+    
+    // HF CALL WITH PROXY
+    window.callHf = async function(model, messages) { 
+        const directUrl = `https://api-inference.huggingface.co/models/${model.id}/v1/chat/completions`;
+        const proxyUrl = "https://corsproxy.io/?" + encodeURIComponent(directUrl);
+        return window.callOpenAIFormat(proxyUrl, state.hfApiKey, model.id, messages, true); 
+    }
+
+    window.callOpenAIFormat = async function(endpoint, key, modelId, messages, isProxy) {
+       const formatted = messages.map(m => ({ role: m.role === "user" ? "user" : "assistant", content: m.text }));
+       const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` }, body: JSON.stringify({ model: modelId, messages: formatted, max_tokens: 2048 }) });
+       const data = await res.json();
+       if (!res.ok) { if(data.error?.includes("loading")) throw new Error("Modelo cargando, reintenta en 20s"); throw new Error(data.error?.message || JSON.stringify(data)); }
+       return data.choices?.[0]?.message?.content || "Vacio";
+    }
+
+    window.createNewChat = function(r=true) { const c={id:Date.now().toString(),title:"Nuevo Chat",messages:[]}; state.chats.unshift(c); state.currentChatId=c.id; window.saveToLocalStorage(); if(r){window.renderChatHistory();window.renderMessages();} }
+    window.loadChat = function(id) { state.currentChatId=id; window.renderChatHistory(); window.renderMessages(); }
+    window.deleteChat = function(e,id) { e.stopPropagation(); if(confirm("¿Borrar?")){ state.chats=state.chats.filter(c=>c.id!==id); state.currentChatId=state.chats.length?state.chats[0].id:null; if(!state.currentChatId) window.createNewChat(false); window.saveToLocalStorage(); window.renderChatHistory(); window.renderMessages(); } }
+    window.renderChatHistory = function() {
+      document.getElementById("chat-history-list").innerHTML = state.chats.map(c => `
+        <div onclick="window.loadChat('${c.id}')" class="group flex items-center justify-between p-3 rounded-lg cursor-pointer mb-1 transition ${c.id===state.currentChatId?'bg-gray-800 text-white':'text-gray-400 hover:bg-gray-900'}">
+          <div class="flex items-center gap-3 overflow-hidden"><i class="fas fa-message text-xs"></i><span class="text-sm truncate">${c.title}</span></div>
+          <button onclick="window.deleteChat(event,'${c.id}')" class="opacity-0 group-hover:opacity-100 hover:text-red-400"><i class="fas fa-trash text-xs"></i></button>
+        </div>`).join("");
+    }
+    window.renderMessages = function() {
+      const c = state.chats.find(x=>x.id===state.currentChatId); const cont=document.getElementById("messages-list"); const wel=document.getElementById("welcome-screen");
+      if(!c || c.messages.length===0){ cont.classList.add("hidden"); wel.classList.remove("hidden"); return; }
+      wel.classList.add("hidden"); cont.classList.remove("hidden");
+      cont.innerHTML = c.messages.map(m => {
+        const u = m.role==="user";
+        return `<div class="flex w-full ${u?"justify-end":"justify-start"}"><div class="flex gap-3 max-w-[85%] ${u?"flex-row-reverse":"flex-row"}">
+        <div class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${u?"bg-gray-700":"bg-green-600"}"><i class="fas ${u?"fa-user":"fa-robot"} text-white text-sm"></i></div>
+        <div class="px-4 py-3 rounded-2xl ${u?"bg-gray-800 text-white":"bg-transparent"} markdown-body text-sm leading-relaxed overflow-hidden">${u?`<p>${m.text}</p>`:marked.parse(m.text)}</div></div></div>`;
+      }).join("");
+      document.getElementById("chat-container").scrollTop = document.getElementById("chat-container").scrollHeight;
+    }
+    window.sendMessage = async function() {
+      if (state.isGenerating) return; const m = window.getCurrentModel(); if (!m) return alert("Modelo no válido");
+      const inp = document.getElementById("user-input"); const txt = inp.value.trim(); if (!txt) return;
+      const c = state.chats.find(x=>x.id===state.currentChatId); if(c.messages.length===0){c.title=txt.substring(0,30)+"...";window.renderChatHistory();}
+      c.messages.push({role:"user",text:txt}); inp.value=""; inp.style.height="auto"; window.renderMessages();
+      state.isGenerating=true; document.getElementById("send-btn").disabled=true; 
+      const d=document.createElement("div"); d.id="typing"; d.className="pl-11"; d.innerHTML=`<div class="px-4 py-2 flex gap-1"><div class="typing-dot w-2 h-2 bg-gray-500 rounded-full"></div><div class="typing-dot w-2 h-2 bg-gray-500 rounded-full"></div><div class="typing-dot w-2 h-2 bg-gray-500 rounded-full"></div></div>`;
+      document.getElementById("messages-list").appendChild(d); window.scrollToBottom();
+      try {
+         const ctx = c.messages.slice(-8);
+         let r=""; 
+         if(m.provider==="google") r=await window.callGoogle(m,ctx);
+         else if(m.provider==="groq") r=await window.callGroq(m,ctx);
+         else r=await window.callHf(m,ctx);
+         c.messages.push({role:"ai",text:r}); window.saveToLocalStorage();
+      } catch(e) { c.messages.push({role:"ai",text:`⚠️ Error: ${e.message}`}); }
+      state.isGenerating=false; if(document.getElementById("typing"))document.getElementById("typing").remove(); window.renderMessages(); document.getElementById("send-btn").disabled=false;
+    }
+    window.scrollToBottom = function() { const c = document.getElementById("chat-container"); c.scrollTop = c.scrollHeight; }
+    window.autoResize=function(t){t.style.height="auto";t.style.height=Math.min(t.scrollHeight,200)+"px";}
+    window.handleEnter=function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();window.sendMessage();}}
+    window.openSettings=function(){document.getElementById("google-api-key-input").value=state.googleApiKey;document.getElementById("groq-api-key-input").value=state.groqApiKey;document.getElementById("hf-api-key-input").value=state.hfApiKey;document.getElementById("settings-modal").classList.remove("hidden");document.getElementById("settings-modal").classList.add("flex");}
+    window.closeSettings=function(){document.getElementById("settings-modal").classList.add("hidden");document.getElementById("settings-modal").classList.remove("flex");}
+    window.saveSettings=function(){state.googleApiKey=document.getElementById("google-api-key-input").value.trim();state.groqApiKey=document.getElementById("groq-api-key-input").value.trim();state.hfApiKey=document.getElementById("hf-api-key-input").value.trim();window.saveToLocalStorage();window.updateSettingsDot();window.closeSettings();}
+    window.updateSettingsDot=function(){const d=document.getElementById("settings-dot");if(!state.googleApiKey&&!state.groqApiKey&&!state.hfApiKey)d.classList.remove("hidden");else d.classList.add("hidden");}
+    window.toggleSidebar=function(){const s=document.querySelector("aside");s.classList.toggle("hidden");s.classList.toggle("absolute");s.classList.toggle("z-20");s.classList.toggle("h-full");}
+  </script>
+</body>
+</html>
