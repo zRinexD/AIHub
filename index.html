@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AIhub Chat V20</title>
+  <title>ByoKai Chat</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
@@ -88,7 +88,6 @@
       }
     }
   </style>
-  <link rel="stylesheet" href="/index.css">
 </head>
 
 <body class="bg-gray-900 text-gray-100 font-sans h-screen flex overflow-hidden">
@@ -101,7 +100,9 @@
       </button>
     </div>
     <div class="flex-1 overflow-y-auto px-2" id="chat-history-list"></div>
-    <div class="p-4 border-t border-gray-800 text-xs text-gray-500 text-center">Google • Groq • SambaNova • OpenRouter</div>
+    <div class="p-4 border-t border-gray-800 text-xs text-gray-500 text-center">
+      Google • Groq • Cerebras • Samba • OpenRouter
+    </div>
   </aside>
 
   <main class="flex-1 flex flex-col h-full relative">
@@ -135,12 +136,12 @@
     <div id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth">
       <div id="welcome-screen" class="h-full flex flex-col items-center justify-center text-gray-500 opacity-100">
         <div class="flex gap-4 mb-4 text-5xl">
-          <i class="fas fa-shield-alt text-green-500"></i>
-          <i class="fas fa-bug text-red-500 opacity-50 decoration-slice"></i>
+          <i class="fas fa-brain text-pink-500"></i>
+          <i class="fas fa-network-wired text-blue-500 opacity-50 decoration-slice"></i>
         </div>
-        <h2 class="text-2xl font-bold text-gray-300">AI HUB V20</h2>
+        <h2 class="text-2xl font-bold text-gray-300">ByoKai</h2>
         <div class="mt-4 bg-gray-800/50 border border-gray-700 p-3 rounded text-xs text-gray-400 max-w-sm text-center">
-            Esta aplicación centraliza modelos de IA de múltiples proveedores (Google, Groq, SambaNova, OpenRouter).
+            Esta aplicación centraliza modelos de IA de múltiples proveedores, incluyendo soporte nativo para <strong>Cerebras</strong>.
             <br/>
             Para empezar, introduce tus claves de API en la configuración (⚙️).
         </div>
@@ -197,6 +198,21 @@
         </div>
       </div>
 
+      <!-- CEREBRAS (NUEVO) -->
+      <div class="mb-4 bg-gray-900 p-3 rounded-lg border border-gray-700">
+        <div class="flex items-center justify-between mb-2"><span class="text-sm font-semibold text-pink-400"><i
+              class="fas fa-brain"></i> Cerebras AI</span></div>
+        <input type="password" id="cerebras-api-key-input"
+          class="w-full bg-gray-950 border border-gray-700 rounded p-2 mb-2 text-white text-xs focus:border-pink-500 focus:outline-none"
+          placeholder="csk-..." />
+        <button onclick="window.runCerebrasDiagnostic()" id="cerebras-sync-btn"
+          class="w-full py-2 bg-pink-900/50 hover:bg-pink-800 text-pink-200 border border-pink-800 rounded text-xs transition flex items-center justify-center gap-2"><i
+            class="fas fa-stethoscope"></i> Diagnóstico Cerebras</button>
+        <div id="cerebras-scan-log"
+          class="mt-2 h-24 bg-black rounded p-2 overflow-y-auto text-[10px] font-mono border border-gray-800 hidden text-gray-400">
+        </div>
+      </div>
+
       <!-- SAMBANOVA -->
       <div class="mb-4 bg-gray-900 p-3 rounded-lg border border-gray-700">
         <div class="flex items-center justify-between mb-2"><span class="text-sm font-semibold text-orange-400"><i
@@ -212,7 +228,7 @@
         </div>
       </div>
       
-      <!-- OPENROUTER (NUEVO) -->
+      <!-- OPENROUTER -->
       <div class="mb-4 bg-gray-900 p-3 rounded-lg border border-gray-700">
         <div class="flex items-center justify-between mb-2"><span class="text-sm font-semibold text-cyan-400"><i
               class="fas fa-share-alt"></i> OpenRouter (CORS OK)</span></div>
@@ -228,7 +244,7 @@
       </div>
 
 
-      <!-- HUGGING FACE (Mantenido por si se usa un proxy) -->
+      <!-- HUGGING FACE -->
       <div class="mb-4 bg-gray-900 p-3 rounded-lg border border-gray-700">
         <div class="flex items-center justify-between mb-2"><span class="text-sm font-semibold text-yellow-400"><i
               class="fas fa-smile"></i> Hugging Face (Problemas de CORS)</span></div>
@@ -253,7 +269,7 @@
   </div>
 
   <script>
-    // ARQUITECTURA: Catálogo V20 - Integración OpenRouter
+    // ARQUITECTURA: Catálogo V21 - Cerebras Added
     const SAMBANOVA_MODELS = [
       "DeepSeek-R1", "DeepSeek-R1-Distill-Llama-70B", "DeepSeek-V3-0324", 
       "Meta-Llama-3.3-70B-Instruct", "Meta-Llama-3.1-8B-Instruct", 
@@ -261,24 +277,32 @@
       "Llama-3.3-Swallow-70B-Instruct-v0.4"
     ];
 
-    const APP_STORAGE_KEY = "ai_chat_v20_samba_openrouter";
+    // MODELOS CEREBRAS ESPECÍFICOS SOLICITADOS
+    const CEREBRAS_SPECIFIC_MODELS = [
+        "gpt-oss-120b", 
+        "llama3.1-8b", 
+        "qwen-3-235b-a22b-instruct-2507", 
+        "qwen-3-32b", 
+        "zai-glm-4.6"
+    ];
+
+    const APP_STORAGE_KEY = "ai_chat_v21_cerebras_edition";
     
     // Listas de modelos validados
-    var googleModels = [], groqModels = [], sambaModels = [], hfModels = [], openrouterModels = [];
+    var googleModels = [], groqModels = [], sambaModels = [], hfModels = [], openrouterModels = [], cerebrasModels = [];
     
     var state = {
-      googleApiKey: "", groqApiKey: "", sambaApiKey: "", hfApiKey: "", openrouterApiKey: "", // <-- NUEVA KEY
+      googleApiKey: "", groqApiKey: "", sambaApiKey: "", hfApiKey: "", openrouterApiKey: "", cerebrasApiKey: "",
       currentModel: null, chats: [], currentChatId: null, isGenerating: false
     };
 
-    // HF Models Catalog (Mantenido para el diagnóstico, aunque falle por CORS)
+    // HF Models Catalog
     var HF_CHAT_MODELS = [
       "mistralai/Mistral-7B-Instruct-v0.3", "mistralai/Mixtral-8x7B-Instruct-v0.1", 
       "meta-llama/Llama-3.1-8B-Instruct", "google/gemma-2-9b-it", 
       "microsoft/Phi-3-mini-4k-instruct"
     ];
 
-    // Configuración de Marked con saltos de línea (GFM)
     marked.setOptions({ breaks: true });
 
     window.onload = function () {
@@ -296,12 +320,12 @@
       localStorage.setItem(APP_STORAGE_KEY, JSON.stringify({
         keys: { 
             google: state.googleApiKey, groq: state.groqApiKey, samba: state.sambaApiKey, hf: state.hfApiKey, 
-            openrouter: state.openrouterApiKey // <-- NUEVA KEY
+            openrouter: state.openrouterApiKey, cerebras: state.cerebrasApiKey 
         },
         currentModel: state.currentModel, chats: state.chats,
         cachedModels: { 
             google: googleModels, groq: groqModels, samba: sambaModels, hf: hfModels, 
-            openrouter: openrouterModels // <-- NUEVOS MODELOS
+            openrouter: openrouterModels, cerebras: cerebrasModels
         }
       }));
     }
@@ -315,7 +339,8 @@
         state.groqApiKey = data.keys?.groq || ""; 
         state.sambaApiKey = data.keys?.samba || ""; 
         state.hfApiKey = data.keys?.hf || "";
-        state.openrouterApiKey = data.keys?.openrouter || ""; // <-- Carga de la nueva clave
+        state.openrouterApiKey = data.keys?.openrouter || ""; 
+        state.cerebrasApiKey = data.keys?.cerebras || "";
         
         state.currentModel = data.currentModel || null; 
         state.chats = data.chats || [];
@@ -325,7 +350,8 @@
           groqModels = data.cachedModels.groq || [];
           sambaModels = data.cachedModels.samba || [];
           hfModels = data.cachedModels.hf || [];
-          openrouterModels = data.cachedModels.openrouter || []; // <-- Carga de nuevos modelos
+          openrouterModels = data.cachedModels.openrouter || [];
+          cerebrasModels = data.cachedModels.cerebras || [];
         }
       } catch (e) { }
     }
@@ -343,7 +369,7 @@
         .replace(/'/g, "&#039;");
     }
 
-    // --- DIAGNÓSTICOS EXISTENTES (Optimizados para errores) ---
+    // --- DIAGNÓSTICOS ---
 
     window.runGoogleDiagnostic = async function () {
       const apiKey = document.getElementById("google-api-key-input").value.trim();
@@ -406,6 +432,89 @@
       window.saveToLocalStorage(); window.initModelSelector(); window.updateSettingsDot(); btn.disabled = false; btn.innerHTML = '<i class="fas fa-stethoscope"></i> Diagnóstico Groq';
     }
 
+    // --- CEREBRAS DIAGNOSTIC (NUEVO) ---
+    window.runCerebrasDiagnostic = async function () {
+        const apiKey = document.getElementById("cerebras-api-key-input").value.trim();
+        const log = document.getElementById("cerebras-scan-log");
+        const btn = document.getElementById("cerebras-sync-btn");
+
+        if (!apiKey) return alert("Falta API Key de Cerebras");
+        state.cerebrasApiKey = apiKey; window.saveToLocalStorage();
+
+        btn.disabled = true; btn.innerText = "Conectando Cerebras...";
+        log.classList.remove("hidden"); log.innerHTML = ">> Cerebras: Verificando modelos solicitados...";
+
+        let valid = [];
+        const cerebrasUrl = "https://api.cerebras.ai/v1/chat/completions";
+
+        // Probar los modelos específicos solicitados uno por uno
+        for (const modelId of CEREBRAS_SPECIFIC_MODELS) {
+            log.innerHTML += `<div class="text-pink-300 mt-1">Ping: ${modelId}...</div>`; log.scrollTop = log.scrollHeight;
+            try {
+                // Realizar una llamada de prueba mínima
+                const resp = await fetch(cerebrasUrl, {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${apiKey}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        model: modelId,
+                        messages: [{ role: "user", content: "hi" }],
+                        max_tokens: 1,
+                        stream: false
+                    })
+                });
+
+                if (resp.ok) {
+                    valid.push({ id: modelId, name: modelId, provider: "cerebras" });
+                    log.innerHTML += `<div class="text-green-500 pl-4">✔ Activo</div>`;
+                } else {
+                    const errText = await resp.json().catch(() => ({}));
+                    const errMsg = errText.error?.message || resp.statusText;
+                    // Aunque falle, si el usuario los solicitó específicamente, los añadimos con una advertencia visual en el log, 
+                    // pero para la lista final solo añadimos los que respondan O forzamos si es un error de parámetros pero no de auth.
+                    // Para seguridad, solo agregamos los que funcionan, PERO como son modelos 'custom', puede que la API pública no los liste.
+                    // Vamos a confiar en la respuesta de la API.
+                    log.innerHTML += `<div class="text-red-400 pl-4">Err: ${errMsg.substring(0,30)}...</div>`;
+                }
+            } catch (e) {
+                log.innerHTML += `<div class="text-red-500 pl-4">Net Err: ${e.message}</div>`;
+            }
+            await delay(300);
+        }
+
+        // Si la lista está vacía (quizás todos fallaron), intentamos obtener la lista genérica por si acaso
+        if (valid.length === 0) {
+            log.innerHTML += `<div class="text-gray-400 mt-1">Intentando lista genérica...</div>`;
+            try {
+                 const resp = await fetch("https://api.cerebras.ai/v1/models", { headers: { Authorization: `Bearer ${apiKey}` } });
+                 const data = await resp.json();
+                 if (data.data) {
+                     data.data.forEach(m => valid.push({ id: m.id, name: m.id, provider: "cerebras" }));
+                     log.innerHTML += `<div class="text-green-400">>> Encontrados: ${valid.length} genéricos</div>`;
+                 }
+            } catch(e) {}
+        }
+
+        // Fallback: Si el usuario insiste en estos modelos y la API falla solo en la validación pero la Key es correcta,
+        // podríamos forzarlos. Por ahora, solo guardamos los validados.
+        
+        // **MODIFICACIÓN**: Dado que los modelos solicitados (gpt-oss-120b, etc.) pueden ser alias internos o beta,
+        // si la validación falla por "model not found" no los agregamos. Pero si valid.length es 0 y tenemos key,
+        // agregamos la lista hardcodeada para que el usuario pueda intentar usarlos igual.
+        if (valid.length === 0 && apiKey.startsWith("csk-")) {
+            log.innerHTML += `<div class="text-yellow-400 mt-2">>> Advertencia: No se validaron modelos. Agregando lista solicitada forzosamente.</div>`;
+            CEREBRAS_SPECIFIC_MODELS.forEach(m => valid.push({ id: m, name: m + " (Force)", provider: "cerebras" }));
+        }
+
+        cerebrasModels = valid;
+        log.innerHTML += `<div class="text-white mt-2 font-bold">>> Total Cerebras: ${valid.length}</div>`;
+        
+        window.saveToLocalStorage(); window.initModelSelector(); window.updateSettingsDot();
+        btn.disabled = false; btn.innerHTML = '<i class="fas fa-stethoscope"></i> Diagnóstico Cerebras';
+    }
+
     window.runSambaDiagnostic = async function () {
       const apiKey = document.getElementById("samba-api-key-input").value.trim();
       const log = document.getElementById("samba-scan-log");
@@ -454,14 +563,13 @@
         } catch (e) {
           log.innerHTML += `<div class="text-red-500 pl-4">Net: ${e.message}</div>`;
         }
-        await delay(500); // Reducido el delay para hacer la prueba más rápida
+        await delay(500); 
       }
       sambaModels = valid; window.saveToLocalStorage(); window.initModelSelector(); window.updateSettingsDot();
       log.innerHTML += `<div class="text-white font-bold mt-2">>> Disponibles: ${valid.length}</div>`;
       btn.disabled = false; btn.innerHTML = '<i class="fas fa-stethoscope"></i> Diagnóstico SambaNova';
     }
 
-    // --- NUEVO DIAGNÓSTICO: OPENROUTER ---
     window.runOpenRouterDiagnostic = async function () {
         const apiKey = document.getElementById("openrouter-api-key-input").value.trim();
         const log = document.getElementById("openrouter-scan-log");
@@ -471,7 +579,7 @@
         state.openrouterApiKey = apiKey; window.saveToLocalStorage();
 
         btn.disabled = true; btn.innerText = "Auditando modelos...";
-        log.classList.remove("hidden"); log.innerHTML = ">> OpenRouter: Conectando y obteniendo lista...";
+        log.classList.remove("hidden"); log.innerHTML = ">> OpenRouter: Conectando...";
 
         let valid = [];
         const openrouterUrl = "https://openrouter.ai/api/v1/models";
@@ -489,7 +597,6 @@
             const data = await resp.json();
             const rawList = data.data || [];
 
-            // Filtrar modelos aptos para chat y ordenar
             valid = rawList
                 .filter(m => m.id.includes("llama") || m.id.includes("mixtral") || m.id.includes("mistral") || m.id.includes("gemma") || m.id.includes("gpt"))
                 .map(m => ({ id: m.id, name: m.id.split("/").pop(), provider: "openrouter" }));
@@ -507,7 +614,6 @@
         btn.disabled = false; btn.innerHTML = '<i class="fas fa-stethoscope"></i> Diagnóstico OpenRouter';
     }
 
-    // --- DIAGNÓSTICO HF (CORS-AWARE) ---
     window.runHFDiagnostic = async function () {
       const apiKey = document.getElementById("hf-api-key-input").value.trim();
       const log = document.getElementById("hf-scan-log");
@@ -517,9 +623,8 @@
       state.hfApiKey = apiKey; window.saveToLocalStorage();
 
       btn.disabled = true; btn.innerText = "Verificando...";
-      log.classList.remove("hidden"); log.innerHTML = ">> Hugging Face: Probando modelos (¡Sujeto a CORS!)...";
-      log.innerHTML += '<div class="text-yellow-500">ADVERTENCIA: Si ve "Net: Failed to fetch", es un bloqueo CORS.</div>';
-
+      log.classList.remove("hidden"); log.innerHTML = ">> Hugging Face: Probando modelos...";
+      
       let valid = [];
       for (const modelId of HF_CHAT_MODELS) {
         log.innerHTML += `<div class="text-yellow-200 mt-1">Ping: ${modelId.split("/").pop()}...</div>`; log.scrollTop = log.scrollHeight;
@@ -533,25 +638,16 @@
             valid.push({ id: modelId, name: modelId.split("/").pop(), provider: "hf" });
             log.innerHTML += `<div class="text-green-500 pl-4">✔ Activo</div>`;
           } else {
-            const errText = await resp.text();
-            let msg = `Status: ${resp.status}`;
-            try {
-              const json = JSON.parse(errText);
-              if (json.error && json.error.message) msg = json.error.message;
-              else if (json.message) msg = json.message;
-            } catch (e) {
-              if (errText.length < 100 && errText.length > 0) msg = errText;
-            }
-            log.innerHTML += `<div class="text-red-500 pl-4">Err: ${msg}</div>`;
+             log.innerHTML += `<div class="text-red-500 pl-4">Err: ${resp.status}</div>`;
           }
         } catch (e) {
-          log.innerHTML += `<div class="text-red-500 pl-4">Net: Failed to fetch (Bloqueo CORS)</div>`;
+          log.innerHTML += `<div class="text-red-500 pl-4">Net: Failed (CORS?)</div>`;
         }
         await delay(500);
       }
       hfModels = valid; window.saveToLocalStorage(); window.initModelSelector(); window.updateSettingsDot();
       log.innerHTML += `<div class="text-white font-bold mt-2">>> Disponibles: ${valid.length}</div>`;
-      btn.disabled = false; btn.innerHTML = '<i class="fas fa-stethoscope"></i> Diagnóstico Hugging Face (Solo si usa Proxy)';
+      btn.disabled = false; btn.innerHTML = '<i class="fas fa-stethoscope"></i> Diagnóstico HF';
     }
 
     // --- GESTIÓN DE MODELOS ---
@@ -560,16 +656,19 @@
       const m = window.getCurrentModel(); if (m) return;
       if (googleModels.length > 0) state.currentModel = { provider: "google", id: googleModels[0].id };
       else if (groqModels.length > 0) state.currentModel = { provider: "groq", id: groqModels[0].id };
+      else if (cerebrasModels.length > 0) state.currentModel = { provider: "cerebras", id: cerebrasModels[0].id }; // Priority
       else if (sambaModels.length > 0) state.currentModel = { provider: "samba", id: sambaModels[0].id };
       else if (openrouterModels.length > 0) state.currentModel = { provider: "openrouter", id: openrouterModels[0].id };
       else if (hfModels.length > 0) state.currentModel = { provider: "hf", id: hfModels[0].id };
       else state.currentModel = null;
     }
+    
     window.getCurrentModel = function () {
       if (!state.currentModel) return null;
       let list;
       if (state.currentModel.provider === "google") list = googleModels;
       else if (state.currentModel.provider === "groq") list = groqModels;
+      else if (state.currentModel.provider === "cerebras") list = cerebrasModels;
       else if (state.currentModel.provider === "samba") list = sambaModels;
       else if (state.currentModel.provider === "openrouter") list = openrouterModels;
       else list = hfModels;
@@ -583,7 +682,7 @@
       const badge = document.getElementById("model-count-badge");
       const statusBadge = document.getElementById("validation-status");
 
-      const total = googleModels.length + groqModels.length + sambaModels.length + hfModels.length + openrouterModels.length; // + NUEVO TOTAL
+      const total = googleModels.length + groqModels.length + sambaModels.length + hfModels.length + openrouterModels.length + cerebrasModels.length;
       
       if (total === 0) {
         selector.innerHTML = '<option value="" disabled selected>Sin modelos. Ejecuta diagnósticos ⚙️</option>'; 
@@ -598,24 +697,25 @@
       
       if (googleModels.length) { html += '<optgroup label="Google AI">'; googleModels.forEach(m => html += `<option value="google::${m.id}" ${window.isSelected("google", m.id)}>${m.name}</option>`); html += "</optgroup>"; }
       if (groqModels.length) { html += '<optgroup label="GroqCloud">'; groqModels.forEach(m => html += `<option value="groq::${m.id}" ${window.isSelected("groq", m.id)}>${m.name}</option>`); html += "</optgroup>"; }
+      
+      // CEREBRAS GROUP
+      if (cerebrasModels.length) { html += '<optgroup label="Cerebras AI">'; cerebrasModels.forEach(m => html += `<option value="cerebras::${m.id}" ${window.isSelected("cerebras", m.id)}>${m.name}</option>`); html += "</optgroup>"; }
+      
       if (sambaModels.length) {
         html += '<optgroup label="SambaNova">';
         sambaModels.forEach(m => {
           let s = m.name;
           s = s.replace(/^Meta-/, "").replace(/-Instruct.*/, "").replace(/-Distill/, "");
-          if (s.includes("DeepSeek")) s = s.replace("Llama-", "");
           html += `<option value="samba::${m.id}" ${window.isSelected("samba", m.id)}>${s}</option>`
         });
         html += "</optgroup>";
       }
       
-      // NUEVO: OpenRouter
       if (openrouterModels.length) { html += '<optgroup label="OpenRouter">'; openrouterModels.forEach(m => html += `<option value="openrouter::${m.id}" ${window.isSelected("openrouter", m.id)}>${m.name}</option>`); html += "</optgroup>"; }
-      
       if (hfModels.length) { html += '<optgroup label="Hugging Face">'; hfModels.forEach(m => html += `<option value="hf::${m.id}" ${window.isSelected("hf", m.id)}>${m.name}</option>`); html += "</optgroup>"; }
       
       selector.innerHTML = html; 
-      badge.textContent = `G: ${googleModels.length} • Groq: ${groqModels.length} • Samba: ${sambaModels.length} • OR: ${openrouterModels.length} • HF: ${hfModels.length}`;
+      badge.textContent = `G: ${googleModels.length} • Cer: ${cerebrasModels.length} • Groq: ${groqModels.length} • Samba: ${sambaModels.length} • OR: ${openrouterModels.length}`;
 
       const current = window.getCurrentModel();
       statusBadge.className = 'text-gray-500 text-right';
@@ -624,8 +724,9 @@
          statusBadge.classList.remove("text-gray-500");
          if (current.provider === "google") statusBadge.classList.add("text-blue-400");
          else if (current.provider === "groq") statusBadge.classList.add("text-purple-400");
+         else if (current.provider === "cerebras") statusBadge.classList.add("text-pink-400"); // PINK FOR CEREBRAS
          else if (current.provider === "samba") statusBadge.classList.add("text-orange-400");
-         else if (current.provider === "openrouter") statusBadge.classList.add("text-cyan-400"); // COLOR CYAN
+         else if (current.provider === "openrouter") statusBadge.classList.add("text-cyan-400");
          else if (current.provider === "hf") statusBadge.classList.add("text-yellow-400");
       } else {
          statusBadge.textContent = "Selecciona un modelo";
@@ -655,9 +756,12 @@
 
     window.callGroq = async function (model, messages) { return window.callOpenAIFormat("https://api.groq.com/openai/v1/chat/completions", state.groqApiKey, model.id, messages); }
     window.callSamba = async function (model, messages) { return window.callOpenAIFormat("https://api.sambanova.ai/v1/chat/completions", state.sambaApiKey, model.id, messages); }
-    
-    // NUEVO CALL: OpenRouter
     window.callOpenRouter = async function (model, messages) { return window.callOpenAIFormat("https://openrouter.ai/api/v1/chat/completions", state.openrouterApiKey, model.id, messages); }
+    
+    // NUEVA LLAMADA: CEREBRAS
+    window.callCerebras = async function (model, messages) { 
+        return window.callOpenAIFormat("https://api.cerebras.ai/v1/chat/completions", state.cerebrasApiKey, model.id, messages); 
+    }
 
     window.callHF = async function (model, messages) {
       const lastMessage = messages[messages.length - 1].text; 
@@ -701,7 +805,7 @@
 
     window.createNewChat = function (r = true) { const c = { id: Date.now().toString(), title: "New Chat", messages: [] }; state.chats.unshift(c); state.currentChatId = c.id; window.saveToLocalStorage(); if (r) { window.renderChatHistory(); window.renderMessages(); } }
     window.loadChat = function (id) { state.currentChatId = id; window.renderChatHistory(); window.renderMessages(); }
-    window.deleteChat = function (e, id) { e.stopPropagation(); if (confirm("¿Estás seguro de que quieres eliminar este chat? Esta acción es irreversible.")) { state.chats = state.chats.filter(c => c.id !== id); state.currentChatId = state.chats.length ? state.chats[0].id : null; if (!state.currentChatId) window.createNewChat(false); window.saveToLocalStorage(); window.renderChatHistory(); window.renderMessages(); } }
+    window.deleteChat = function (e, id) { e.stopPropagation(); if (confirm("¿Borrar chat?")) { state.chats = state.chats.filter(c => c.id !== id); state.currentChatId = state.chats.length ? state.chats[0].id : null; if (!state.currentChatId) window.createNewChat(false); window.saveToLocalStorage(); window.renderChatHistory(); window.renderMessages(); } }
     
     window.renderChatHistory = function () {
       document.getElementById("chat-history-list").innerHTML = state.chats.map(c => `
@@ -741,7 +845,7 @@
     window.sendMessage = async function () {
       if (state.isGenerating) return; 
       const m = window.getCurrentModel(); 
-      if (!m) return alert("Modelo no válido. Por favor, selecciona un modelo o ejecuta un diagnóstico.");
+      if (!m) return alert("Modelo no válido. Configura las APIs ⚙️");
       
       const inp = document.getElementById("user-input"); 
       const txt = inp.value.trim(); 
@@ -775,15 +879,16 @@
         
         if (m.provider === "google") r = await window.callGoogle(m, ctx);
         else if (m.provider === "groq") r = await window.callGroq(m, ctx);
+        else if (m.provider === "cerebras") r = await window.callCerebras(m, ctx); // <-- RUTA CEREBRAS
         else if (m.provider === "samba") r = await window.callSamba(m, ctx);
-        else if (m.provider === "openrouter") r = await window.callOpenRouter(m, ctx); // <-- NUEVO ROUTING
+        else if (m.provider === "openrouter") r = await window.callOpenRouter(m, ctx); 
         else if (m.provider === "hf") r = await window.callHF(m, ctx);
         
         c.messages.push({ role: "ai", text: r }); 
         window.saveToLocalStorage();
       } catch (e) { 
         console.error("AI Generation Error:", e);
-        c.messages.push({ role: "ai", text: `⚠️ Error de API (${m.provider} / ${m.id}): ${e.message}` }); 
+        c.messages.push({ role: "ai", text: `⚠️ Error de API (${m.provider}): ${e.message}` }); 
       }
       
       state.isGenerating = false; 
@@ -800,9 +905,10 @@
     window.openSettings = function () {
       document.getElementById("google-api-key-input").value = state.googleApiKey;
       document.getElementById("groq-api-key-input").value = state.groqApiKey;
+      document.getElementById("cerebras-api-key-input").value = state.cerebrasApiKey; // <-- SET CEREBRAS INPUT
       document.getElementById("samba-api-key-input").value = state.sambaApiKey;
       document.getElementById("hf-api-key-input").value = state.hfApiKey;
-      document.getElementById("openrouter-api-key-input").value = state.openrouterApiKey; // <-- NUEVO INPUT
+      document.getElementById("openrouter-api-key-input").value = state.openrouterApiKey;
       
       document.getElementById("settings-modal").classList.remove("hidden");
       document.getElementById("settings-modal").classList.add("flex");
@@ -810,9 +916,10 @@
     window.closeSettings = function () { 
         document.getElementById("google-scan-log").classList.add("hidden");
         document.getElementById("groq-scan-log").classList.add("hidden");
+        document.getElementById("cerebras-scan-log").classList.add("hidden"); // <-- HIDE LOG
         document.getElementById("samba-scan-log").classList.add("hidden");
         document.getElementById("hf-scan-log").classList.add("hidden");
-        document.getElementById("openrouter-scan-log").classList.add("hidden"); // <-- OCULTAR LOG
+        document.getElementById("openrouter-scan-log").classList.add("hidden");
         
         document.getElementById("settings-modal").classList.add("hidden"); 
         document.getElementById("settings-modal").classList.remove("flex"); 
@@ -821,9 +928,10 @@
     window.saveSettings = function () {
       state.googleApiKey = document.getElementById("google-api-key-input").value.trim();
       state.groqApiKey = document.getElementById("groq-api-key-input").value.trim();
+      state.cerebrasApiKey = document.getElementById("cerebras-api-key-input").value.trim(); // <-- SAVE KEY
       state.sambaApiKey = document.getElementById("samba-api-key-input").value.trim();
       state.hfApiKey = document.getElementById("hf-api-key-input").value.trim();
-      state.openrouterApiKey = document.getElementById("openrouter-api-key-input").value.trim(); // <-- GUARDAR NUEVA CLAVE
+      state.openrouterApiKey = document.getElementById("openrouter-api-key-input").value.trim();
       
       window.saveToLocalStorage(); 
       window.updateSettingsDot(); 
@@ -832,8 +940,7 @@
     
     window.updateSettingsDot = function () { 
       const d = document.getElementById("settings-dot"); 
-      // Si falta al menos una de las APIs principales (Google, Groq, Samba, OpenRouter)
-      if (!state.googleApiKey && !state.groqApiKey && !state.sambaApiKey && !state.openrouterApiKey) {
+      if (!state.googleApiKey && !state.groqApiKey && !state.cerebrasApiKey && !state.sambaApiKey && !state.openrouterApiKey) {
         d.classList.remove("hidden"); 
       } else {
         d.classList.add("hidden"); 
@@ -842,7 +949,6 @@
     
     window.toggleSidebar = function () { const s = document.querySelector("aside"); s.classList.toggle("hidden"); s.classList.toggle("absolute"); s.classList.toggle("z-20"); s.classList.toggle("h-full"); }
   </script>
-  <script type="module" src="/index.tsx"></script>
 </body>
 
 </html>
